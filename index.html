@@ -1,1431 +1,720 @@
 <!DOCTYPE html>
-
 <html lang="en">
-
 <head>
-
     <meta charset="UTF-8">
-
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-
     <title>CyberTTS - Audio Reader</title>
-
     
-
     <!-- PDF.js library for client-side text extraction -->
-
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-
     <script>pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';</script>
 
-
-
     <style>
-
         /* =========================================
-
            CSS - Cyberpunk Aesthetics & Layout
-
            ========================================= */
-
         :root {
-
             --bg-color: #050a1f;
-
             --neon-blue: #00f3ff;
-
             --dark-panel: rgba(10, 20, 45, 0.85);
-
             --text-light: #e0fbfc;
-
             --danger: #ff003c;
-
         }
-
-
 
         * {
-
             box-sizing: border-box;
-
             margin: 0;
-
             padding: 0;
-
             font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-
         }
-
-
 
         body {
-
             background-color: var(--bg-color);
-
             color: var(--text-light);
-
             overflow-x: hidden;
-
             display: flex;
-
             flex-direction: column;
-
             min-height: 100vh;
-
         }
-
-
 
         body::before {
-
             content: '';
-
             position: fixed;
-
             top: -50%;
-
             left: -50%;
-
             width: 200%;
-
             height: 200%;
-
             background: radial-gradient(circle at 50% 50%, rgba(0, 243, 255, 0.05) 0%, transparent 50%);
-
             z-index: -1;
-
             animation: pulseBg 10s infinite alternate;
-
         }
-
-
 
         @keyframes pulseBg {
-
             0% { transform: scale(1); }
-
             100% { transform: scale(1.1); }
-
         }
-
-
 
         #toast-container {
-
             position: fixed;
-
             top: 20px;
-
             left: 50%;
-
             transform: translateX(-50%);
-
             z-index: 1000;
-
             display: flex;
-
             flex-direction: column;
-
             gap: 10px;
-
         }
-
         
-
         .toast {
-
             background: var(--dark-panel);
-
             border-left: 4px solid var(--neon-blue);
-
             padding: 15px 25px;
-
             border-radius: 4px;
-
             box-shadow: 0 0 15px rgba(0, 243, 255, 0.2);
-
             opacity: 0;
-
             transition: opacity 0.3s ease-in-out;
-
         }
-
-
 
         main {
-
             flex: 1;
-
             padding: 20px;
-
             padding-bottom: 120px;
-
             max-width: 800px;
-
             margin: 0 auto;
-
             width: 100%;
-
         }
-
-
 
         h1, h2 {
-
             text-align: center;
-
             color: var(--neon-blue);
-
             text-shadow: 0 0 10px rgba(0, 243, 255, 0.4);
-
             margin-bottom: 20px;
-
         }
-
-
 
         #library-view { display: block; }
 
-
-
         #drop-zone {
-
             border: 2px dashed var(--neon-blue);
-
             border-radius: 10px;
-
             padding: 50px 20px;
-
             text-align: center;
-
             background: rgba(0, 243, 255, 0.05);
-
             cursor: pointer;
-
             transition: all 0.3s ease;
-
             margin-bottom: 30px;
-
             box-shadow: inset 0 0 20px rgba(0, 243, 255, 0.05);
-
         }
-
-
 
         #drop-zone.dragover {
-
             background: rgba(0, 243, 255, 0.15);
-
             box-shadow: inset 0 0 30px rgba(0, 243, 255, 0.3);
-
         }
-
-
 
         .book-list { list-style: none; }
 
-
-
         .book-item {
-
             background: var(--dark-panel);
-
             border: 1px solid rgba(0, 243, 255, 0.2);
-
             padding: 15px;
-
             border-radius: 8px;
-
             margin-bottom: 10px;
-
             display: flex;
-
             justify-content: space-between;
-
             align-items: center;
-
             cursor: pointer;
-
             transition: transform 0.2s;
-
         }
-
-
 
         .book-item:hover {
-
             transform: translateX(5px);
-
             border-color: var(--neon-blue);
-
         }
-
-
 
         .book-info { flex: 1; }
-
         .book-title { font-weight: bold; font-size: 1.1rem; }
-
         .book-progress { font-size: 0.8rem; color: #aaa; margin-top: 5px; }
-
         
-
         .delete-btn {
-
             background: transparent;
-
             border: 1px solid var(--danger);
-
             color: var(--danger);
-
             padding: 5px 10px;
-
             border-radius: 4px;
-
             cursor: pointer;
-
         }
-
-
 
         #player-view {
-
             display: none;
-
             height: 60vh;
-
             flex-direction: column;
-
             justify-content: center;
-
             align-items: center;
-
         }
-
-
 
         #now-playing-title {
-
             font-size: 2rem;
-
             text-align: center;
-
             margin-bottom: 10px;
-
             text-shadow: 0 0 15px var(--neon-blue);
-
         }
-
-
 
         #now-playing-chunk {
-
             font-size: 1.2rem;
-
             color: #888;
-
             letter-spacing: 2px;
-
         }
-
-
 
         .equalizer {
-
             display: none;
-
             align-items: flex-end;
-
             gap: 5px;
-
             height: 50px;
-
             margin-top: 30px;
-
         }
-
         .bar {
-
             width: 10px;
-
             background: var(--neon-blue);
-
             border-radius: 2px;
-
             animation: bounce 0.5s infinite alternate;
-
         }
-
         .bar:nth-child(2) { animation-delay: 0.1s; }
-
         .bar:nth-child(3) { animation-delay: 0.2s; }
-
         .bar:nth-child(4) { animation-delay: 0.3s; }
-
         .bar:nth-child(5) { animation-delay: 0.4s; }
 
-
-
         @keyframes bounce {
-
             0% { height: 10px; opacity: 0.5; }
-
             100% { height: 50px; opacity: 1; box-shadow: 0 0 10px var(--neon-blue); }
-
         }
-
-
 
         #bottom-player {
-
             position: fixed;
-
             bottom: 0;
-
             left: 0;
-
             width: 100%;
-
             background: rgba(5, 10, 31, 0.9);
-
             backdrop-filter: blur(10px);
-
             border-top: 1px solid var(--neon-blue);
-
             box-shadow: 0 -5px 20px rgba(0, 243, 255, 0.1);
-
             padding: 15px;
-
             display: flex;
-
             flex-direction: column;
-
             gap: 10px;
-
             z-index: 100;
-
         }
-
-
 
         .player-controls {
-
             display: flex;
-
             justify-content: center;
-
             align-items: center;
-
             gap: 20px;
-
         }
-
-
 
         .control-btn {
-
             background: none;
-
             border: none;
-
             color: var(--neon-blue);
-
             font-size: 1.5rem;
-
             cursor: pointer;
-
             transition: text-shadow 0.2s;
-
         }
-
         .control-btn:hover { text-shadow: 0 0 10px var(--neon-blue); }
-
         .control-btn.play-pause { font-size: 2.5rem; }
 
-
-
         .player-settings {
-
             display: flex;
-
             justify-content: space-between;
-
             align-items: center;
-
             font-size: 0.9rem;
-
         }
-
-
 
         select {
-
             background: var(--bg-color);
-
             color: var(--text-light);
-
             border: 1px solid var(--neon-blue);
-
             padding: 5px;
-
             border-radius: 4px;
-
             outline: none;
-
         }
-
-
 
         #eta-display {
-
             font-family: monospace;
-
             color: #aaa;
-
         }
-
     </style>
-
 </head>
-
 <body>
-
-
 
     <div id="toast-container"></div>
 
-
-
     <main>
-
         <section id="library-view">
-
             <h1>CYBER TTS LIBRARY</h1>
-
             
-
             <div id="drop-zone">
-
                 <p>Drag & Drop PDF Book Here</p>
-
                 <p style="font-size: 0.8rem; margin-top:10px; color:#aaa;">(Or click to browse)</p>
-
                 <input type="file" id="file-input" accept="application/pdf" style="display: none;">
-
             </div>
-
-
 
             <h2>My Books</h2>
-
             <ul class="book-list" id="book-list-container"></ul>
-
         </section>
-
-
 
         <section id="player-view">
-
             <h1 id="now-playing-title">Book Title</h1>
-
             <div id="now-playing-chunk">Chunk 1 of X</div>
-
             
-
             <div class="equalizer" id="loading-anim">
-
                 <div class="bar"></div>
-
                 <div class="bar"></div>
-
                 <div class="bar"></div>
-
                 <div class="bar"></div>
-
                 <div class="bar"></div>
-
             </div>
-
             
-
             <button onclick="window.showLibrary()" style="margin-top: 40px; background:transparent; color:var(--neon-blue); border:1px solid var(--neon-blue); padding:8px 15px; border-radius:4px; cursor:pointer;">&larr; Back to Library</button>
-
         </section>
-
     </main>
 
-
-
     <footer id="bottom-player">
-
         <div class="player-settings">
-
             <select id="voice-select">
-
                 <option value="default">Default Voice</option>
-
             </select>
-
             <div id="eta-display">ETA: --:--</div>
-
             <select id="speed-select">
-
                 <option value="0.8">0.8x</option>
-
                 <option value="1.0" selected>1.0x</option>
-
                 <option value="1.2">1.2x</option>
-
                 <option value="1.5">1.5x</option>
-
                 <option value="2.0">2.0x</option>
-
             </select>
-
         </div>
-
-
 
         <div class="player-controls">
-
             <button class="control-btn" id="btn-prev-chunk" title="Previous Chunk">⏮</button>
-
             <button class="control-btn" id="btn-skip-back" title="-15 Seconds">⏪</button>
-
             <button class="control-btn play-pause" id="btn-play-pause">▶</button>
-
             <button class="control-btn" id="btn-skip-forward" title="+15 Seconds">⏩</button>
-
             <button class="control-btn" id="btn-next-chunk" title="Next Chunk">⏭</button>
-
         </div>
 
-
-
         <audio id="core-audio-player" style="display:none;"></audio>
-
     </footer>
 
-
-
     <script>
-
         // =========================================================================
-
         // CyberTTS - Core Application Logic
-
         // =========================================================================
-
-
 
         // --- החלף את המחרוזת כאן בכתובת ה-URL שקיבלת מ-Google Apps Script ---
-
-        const GAS_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbyTYl6BgrnfwyOcu-nvhUG7sYWkRf0RCx1V-KJkhqued5FFGdgWaxOKsmdo7WjtUKM/exec';
-
-
+        const GAS_WEB_APP_URL = 'PASTE_YOUR_WEB_APP_URL_HERE';
 
         // === State Management ===
-
         let db;
-
         let currentBook = null;
-
         let wakeLock = null;
-
         const audioPlayer = document.getElementById('core-audio-player');
-
         const MAX_WORDS_PER_CHUNK = 1000;
 
-
-
         // === 1. IndexedDB Setup (Local Database) ===
-
         const initDB = () => {
-
             return new Promise((resolve, reject) => {
-
                 const request = indexedDB.open('CyberTTS_DB', 1);
-
                 request.onupgradeneeded = (event) => {
-
                     db = event.target.result;
-
                     if (!db.objectStoreNames.contains('books')) {
-
                         db.createObjectStore('books', { keyPath: 'id' });
-
                     }
-
                 };
-
                 request.onsuccess = (event) => {
-
                     db = event.target.result;
-
                     resolve();
-
                 };
-
                 request.onerror = (event) => reject(event.target.error);
-
             });
-
         };
-
-
 
         const saveBookToDB = (book) => {
-
             return new Promise((resolve, reject) => {
-
                 const tx = db.transaction('books', 'readwrite');
-
                 tx.objectStore('books').put(book);
-
                 tx.oncomplete = () => resolve();
-
                 tx.onerror = () => reject(tx.error);
-
             });
-
         };
-
-
 
         const getAllBooksFromDB = () => {
-
             return new Promise((resolve, reject) => {
-
                 const tx = db.transaction('books', 'readonly');
-
                 const request = tx.objectStore('books').getAll();
-
                 request.onsuccess = () => resolve(request.result);
-
                 request.onerror = () => reject(tx.error);
-
             });
-
         };
-
-
 
         const deleteBookFromDB = (id) => {
-
             return new Promise((resolve, reject) => {
-
                 const tx = db.transaction('books', 'readwrite');
-
                 tx.objectStore('books').delete(id);
-
                 tx.oncomplete = () => resolve();
-
                 tx.onerror = () => reject(tx.error);
-
             });
-
         };
-
-
 
         // === 2. UI & Toasts ===
-
         const showToast = (message, isError = false) => {
-
             const container = document.getElementById('toast-container');
-
             const toast = document.createElement('div');
-
             toast.className = 'toast';
-
             toast.style.borderColor = isError ? 'var(--danger)' : 'var(--neon-blue)';
-
             toast.textContent = message;
-
             container.appendChild(toast);
-
             
-
             setTimeout(() => toast.style.opacity = '1', 10);
-
             setTimeout(() => {
-
                 toast.style.opacity = '0';
-
                 setTimeout(() => toast.remove(), 300);
-
             }, 4000);
-
         };
-
-
 
         const toggleLoading = (isLoading) => {
-
             document.getElementById('loading-anim').style.display = isLoading ? 'flex' : 'none';
-
         };
 
-
-
         // === 3. PDF Processing & Chunking ===
-
         const handleFileUpload = async (file) => {
-
             if (!file || file.type !== "application/pdf") {
-
                 showToast("Please upload a valid PDF file.", true);
-
                 return;
-
             }
 
-
-
             showToast("Extracting text from PDF...");
-
             try {
-
                 const arrayBuffer = await file.arrayBuffer();
-
                 const pdf = await pdfjsLib.getDocument(arrayBuffer).promise;
-
                 let fullText = "";
 
-
-
                 for (let i = 1; i <= pdf.numPages; i++) {
-
                     const page = await pdf.getPage(i);
-
                     const textContent = await page.getTextContent();
-
                     const pageText = textContent.items.map(item => item.str).join(" ");
-
                     fullText += pageText + " \n";
-
                 }
-
-
 
                 fullText = fullText.replace(/\s+/g, " ").trim();
 
-
-
                 if (fullText.length < 500) {
-
                     showToast("Error: No readable text found. This looks like a scanned document without OCR.", true);
-
                     return;
-
                 }
-
-
 
                 const chunks = chunkText(fullText);
-
                 
-
                 const newBook = {
-
                     id: Date.now().toString(),
-
                     title: file.name.replace('.pdf', ''),
-
                     chunks: chunks,
-
                     currentChunkIndex: 0,
-
                     audioTimestamp: 0
-
                 };
 
-
-
                 await saveBookToDB(newBook);
-
                 showToast("Book added successfully!");
-
                 renderLibrary();
 
-
-
             } catch (error) {
-
                 console.error(error);
-
                 showToast("Error processing PDF.", true);
-
             }
-
         };
-
-
 
         const chunkText = (text) => {
-
             const sentences = text.match(/[^.!?]+[.!?]+/g) || [text];
-
             const chunks = [];
-
             let currentChunk = "";
-
             let currentWordCount = 0;
 
-
-
             for (let sentence of sentences) {
-
                 const wordCount = sentence.trim().split(/\s+/).length;
-
                 if (currentWordCount + wordCount > MAX_WORDS_PER_CHUNK && currentChunk.length > 0) {
-
                     chunks.push(currentChunk.trim());
-
                     currentChunk = "";
-
                     currentWordCount = 0;
-
                 }
-
                 currentChunk += sentence + " ";
-
                 currentWordCount += wordCount;
-
             }
-
             if (currentChunk.trim().length > 0) {
-
                 chunks.push(currentChunk.trim());
-
             }
-
             return chunks;
-
         };
-
-
 
         // === 4. Library Rendering ===
-
         const renderLibrary = async () => {
-
             const books = await getAllBooksFromDB();
-
             const container = document.getElementById('book-list-container');
-
             container.innerHTML = "";
 
-
-
             books.forEach(book => {
-
                 const li = document.createElement('li');
-
                 li.className = 'book-item';
-
                 
-
                 const progressPct = Math.round((book.currentChunkIndex / book.chunks.length) * 100);
-
                 
-
                 li.innerHTML = `
-
                     <div class="book-info" onclick="loadBook('${book.id}')">
-
                         <div class="book-title">${book.title}</div>
-
                         <div class="book-progress">Progress: ${progressPct}% (Chunk ${book.currentChunkIndex + 1} of ${book.chunks.length})</div>
-
                     </div>
-
                     <button class="delete-btn" onclick="deleteBook('${book.id}')">Delete</button>
-
                 `;
-
                 container.appendChild(li);
-
             });
-
         };
-
-
 
         window.deleteBook = async (id) => {
-
             await deleteBookFromDB(id);
-
             showToast("Book deleted.");
-
             renderLibrary();
-
         };
-
-
 
         // === 5. Audio Engine & Backend Integration ===
-
         window.loadBook = async (id) => {
-
             const books = await getAllBooksFromDB();
-
             currentBook = books.find(b => b.id === id);
-
             if (!currentBook) return;
-
-
 
             document.getElementById('library-view').style.display = 'none';
-
             document.getElementById('player-view').style.display = 'flex';
-
             document.getElementById('now-playing-title').textContent = currentBook.title;
-
             
-
             updatePlayerUI();
-
             updateMediaSession();
-
             
-
             const savedSpeed = localStorage.getItem('cybertts_speed') || "1.0";
-
             document.getElementById('speed-select').value = savedSpeed;
-
             audioPlayer.playbackRate = parseFloat(savedSpeed);
 
-
-
             playCurrentChunk();
-
         };
-
-
 
         const updatePlayerUI = () => {
-
             document.getElementById('now-playing-chunk').textContent = 
-
                 `Chunk ${currentBook.currentChunkIndex + 1} of ${currentBook.chunks.length}`;
-
             
-
             const remainingChunks = currentBook.chunks.length - currentBook.currentChunkIndex;
-
             const estimatedMinutesLeft = Math.round((remainingChunks * MAX_WORDS_PER_CHUNK) / 150);
-
             document.getElementById('eta-display').textContent = `ETA: ~${estimatedMinutesLeft} mins`;
-
         };
 
-
-
-        const fetchAudioFromBackend = async (text, retries = 3) => {
-
+        const fetchAudioFromBackend = async (text, retries = 4) => {
             if (GAS_WEB_APP_URL === 'PASTE_YOUR_WEB_APP_URL_HERE') {
-
                 throw new Error("GAS Web App URL is missing. Please configure GAS_WEB_APP_URL in the code.");
-
             }
-
-
 
             const payload = {
-
                 text: text,
-
                 voice: document.getElementById('voice-select').value,
-
                 speed: document.getElementById('speed-select').value
-
             };
 
-
-
             for (let i = 0; i < retries; i++) {
-
                 try {
-
                     const response = await fetch(GAS_WEB_APP_URL, {
-
                         method: 'POST',
-
                         body: JSON.stringify(payload),
-
                         headers: { 'Content-Type': 'text/plain;charset=utf-8' }
-
                     });
-
                     
-
                     const data = await response.json();
-
                     if (data.success && data.audioBase64) {
-
                         return `data:audio/mp3;base64,${data.audioBase64}`;
-
                     } else {
-
                         throw new Error(data.error || "Unknown API Error");
-
                     }
-
                 } catch (error) {
-
-                    console.warn(`Fetch attempt ${i+1} failed:`, error);
-
+                    console.warn(`Fetch attempt ${i+1} failed:`, error.message);
                     if (i === retries - 1) throw error;
-
-                    await new Promise(res => setTimeout(res, Math.pow(2, i) * 1000));
-
+                    
+                    // מנגנון המתנה מוגדל לצליחת מגבלת מכסות:
+                    // ניסיון 1: 5 שניות | ניסיון 2: 10 שניות | ניסיון 3: 20 שניות
+                    const waitTime = Math.pow(2, i) * 5000; 
+                    await new Promise(res => setTimeout(res, waitTime));
                 }
-
             }
-
         };
-
-
 
         const playCurrentChunk = async () => {
-
             if (!currentBook) return;
-
             
-
             toggleLoading(true);
-
             const chunkText = currentBook.chunks[currentBook.currentChunkIndex];
-
             
-
             try {
-
                 const audioUrl = await fetchAudioFromBackend(chunkText);
-
                 audioPlayer.src = audioUrl;
-
                 audioPlayer.currentTime = currentBook.audioTimestamp || 0; 
-
                 
-
                 await requestWakeLock();
-
                 await audioPlayer.play();
-
                 
-
                 toggleLoading(false);
-
                 updatePlayPauseIcon();
-
                 updateMediaSession();
 
-
-
             } catch (error) {
-
                 toggleLoading(false);
-
                 showToast(error.message || "Network error or API quota reached. Retrying later...", true);
-
                 console.error("Audio generation failed:", error);
-
             }
-
         };
-
-
 
         // === 6. Playback Controls & Smart Bookmarking ===
-
         audioPlayer.addEventListener('timeupdate', () => {
-
             if (Math.floor(audioPlayer.currentTime) % 5 === 0 && currentBook) {
-
                 currentBook.audioTimestamp = audioPlayer.currentTime;
-
                 saveBookToDB(currentBook);
-
             }
-
         });
-
-
 
         audioPlayer.addEventListener('ended', async () => {
-
             if (currentBook.currentChunkIndex < currentBook.chunks.length - 1) {
-
                 currentBook.currentChunkIndex++;
-
                 currentBook.audioTimestamp = 0;
-
                 await saveBookToDB(currentBook);
-
                 updatePlayerUI();
-
                 playCurrentChunk();
-
             } else {
-
                 showToast("Book finished!");
-
                 releaseWakeLock();
-
                 updatePlayPauseIcon();
-
             }
-
         });
-
-
 
         document.getElementById('btn-play-pause').addEventListener('click', () => {
-
             if (audioPlayer.paused) {
-
                 if (!audioPlayer.src) playCurrentChunk();
-
                 else { audioPlayer.play(); requestWakeLock(); }
-
             } else {
-
                 audioPlayer.pause();
-
                 releaseWakeLock();
-
             }
-
             updatePlayPauseIcon();
-
         });
-
-
 
         const updatePlayPauseIcon = () => {
-
             const btn = document.getElementById('btn-play-pause');
-
             btn.textContent = audioPlayer.paused ? '▶' : '⏸';
-
         };
-
-
 
         document.getElementById('btn-skip-forward').addEventListener('click', () => { audioPlayer.currentTime += 15; });
-
         document.getElementById('btn-skip-back').addEventListener('click', () => { audioPlayer.currentTime -= 15; });
 
-
-
         document.getElementById('btn-next-chunk').addEventListener('click', () => {
-
             if (currentBook && currentBook.currentChunkIndex < currentBook.chunks.length - 1) {
-
                 currentBook.currentChunkIndex++;
-
                 currentBook.audioTimestamp = 0;
-
                 playCurrentChunk();
-
                 updatePlayerUI();
-
             }
-
         });
-
-
 
         document.getElementById('btn-prev-chunk').addEventListener('click', () => {
-
             if (currentBook && currentBook.currentChunkIndex > 0) {
-
                 currentBook.currentChunkIndex--;
-
                 currentBook.audioTimestamp = 0;
-
                 playCurrentChunk();
-
                 updatePlayerUI();
-
             }
-
         });
-
-
 
         document.getElementById('speed-select').addEventListener('change', (e) => {
-
             audioPlayer.playbackRate = parseFloat(e.target.value);
-
             localStorage.setItem('cybertts_speed', e.target.value);
-
         });
 
-
-
         window.showLibrary = () => {
-
             document.getElementById('player-view').style.display = 'none';
-
             document.getElementById('library-view').style.display = 'block';
-
             audioPlayer.pause();
-
             releaseWakeLock();
-
             updatePlayPauseIcon();
-
             renderLibrary();
-
         };
-
-
 
         // === 7. Mobile-First & PWA APIs ===
-
         const updateMediaSession = () => {
-
             if ('mediaSession' in navigator && currentBook) {
-
                 navigator.mediaSession.metadata = new MediaMetadata({
-
                     title: `Chunk ${currentBook.currentChunkIndex + 1}/${currentBook.chunks.length}`,
-
                     artist: currentBook.title,
-
                     album: 'CyberTTS Library',
-
                     artwork: [
-
                         { src: 'https://via.placeholder.com/512/050a1f/00f3ff?text=CyberTTS', sizes: '512x512', type: 'image/png' }
-
                     ]
-
                 });
 
-
-
                 navigator.mediaSession.setActionHandler('play', () => audioPlayer.play());
-
                 navigator.mediaSession.setActionHandler('pause', () => audioPlayer.pause());
-
                 navigator.mediaSession.setActionHandler('seekbackward', () => audioPlayer.currentTime -= 15);
-
                 navigator.mediaSession.setActionHandler('seekforward', () => audioPlayer.currentTime += 15);
-
                 navigator.mediaSession.setActionHandler('previoustrack', () => document.getElementById('btn-prev-chunk').click());
-
                 navigator.mediaSession.setActionHandler('nexttrack', () => document.getElementById('btn-next-chunk').click());
-
             }
-
         };
-
-
 
         const requestWakeLock = async () => {
-
             if ('wakeLock' in navigator) {
-
                 try {
-
                     wakeLock = await navigator.wakeLock.request('screen');
-
                 } catch (err) {
-
                     console.warn(`Wake Lock error: ${err.name}, ${err.message}`);
-
                 }
-
             }
-
         };
-
-
 
         const releaseWakeLock = () => {
-
             if (wakeLock !== null) {
-
                 wakeLock.release().then(() => wakeLock = null);
-
             }
-
         };
 
-
-
         // === 8. Drag & Drop Event Listeners ===
-
         const dropZone = document.getElementById('drop-zone');
-
         const fileInput = document.getElementById('file-input');
-
-
 
         dropZone.addEventListener('click', () => fileInput.click());
 
-
-
         dropZone.addEventListener('dragover', (e) => {
-
             e.preventDefault();
-
             dropZone.classList.add('dragover');
-
         });
-
-
 
         dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
 
-
-
         dropZone.addEventListener('drop', (e) => {
-
             e.preventDefault();
-
             dropZone.classList.remove('dragover');
-
             if (e.dataTransfer.files.length) handleFileUpload(e.dataTransfer.files[0]);
-
         });
-
-
 
         fileInput.addEventListener('change', (e) => {
-
             if (e.target.files.length) handleFileUpload(e.target.files[0]);
-
         });
 
-
-
         // === Initialization ===
-
         window.onload = async () => {
-
             try {
-
                 await initDB();
-
                 renderLibrary();
-
             } catch (error) {
-
                 console.error("DB Init error:", error);
-
                 showToast("Database initialization failed.", true);
-
             }
-
         };
-
     </script>
-
 </body>
-
 </html>
