@@ -316,7 +316,7 @@
         let currentBook = null;
         let wakeLock = null;
         const audioPlayer = document.getElementById('core-audio-player');
-        const MAX_WORDS_PER_CHUNK = 350; // תוקן ל-350 כדי למנוע קריסות של שרת ולחסוך במכסה
+        const MAX_WORDS_PER_CHUNK = 350; 
 
         // === 1. IndexedDB Setup (Local Database) ===
         const initDB = () => {
@@ -491,6 +491,13 @@
             document.getElementById('player-view').style.display = 'flex';
             document.getElementById('now-playing-title').textContent = currentBook.title;
             
+            // --- מנגנון שחרור חסימת דפדפן (Unlock Autoplay) ---
+            // ניגון קובץ שקט מיד בלחיצה כדי לשמור על הרשאת האודיו פעילה
+            audioPlayer.src = "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA";
+            audioPlayer.play().catch(e => console.warn("Unlock ignored", e));
+            audioPlayer.pause();
+            // ---------------------------------------------------
+
             updatePlayerUI();
             updateMediaSession();
             
@@ -531,7 +538,6 @@
                     
                     const data = await response.json();
                     if (data.success && data.audioBase64) {
-                        // תוקן ל-WAV במקום MP3 להתאמה מול המודל של Google Flash TTS
                         return `data:audio/wav;base64,${data.audioBase64}`;
                     } else {
                         throw new Error(data.error || "Unknown API Error");
@@ -540,7 +546,6 @@
                     console.warn(`Fetch attempt ${i+1} failed:`, error.message);
                     if (i === retries - 1) throw error;
                     
-                    // מנגנון המתנה מוגדל לצליחת מגבלת מכסות:
                     const waitTime = Math.pow(2, i) * 5000; 
                     await new Promise(res => setTimeout(res, waitTime));
                 }
