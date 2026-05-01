@@ -316,6 +316,8 @@
         let currentBook = null;
         let wakeLock = null;
         const audioPlayer = document.getElementById('core-audio-player');
+        
+        // עומס בקשות וניהול זיכרון הוקטן כדי למנוע קריסות (תואם מגבלות מסלול חינמי)
         const MAX_WORDS_PER_CHUNK = 350; 
 
         // === 1. IndexedDB Setup (Local Database) ===
@@ -492,7 +494,7 @@
             document.getElementById('now-playing-title').textContent = currentBook.title;
             
             // --- מנגנון שחרור חסימת דפדפן (Unlock Autoplay) ---
-            // ניגון קובץ שקט מיד בלחיצה כדי לשמור על הרשאת האודיו פעילה
+            // ניגון קובץ שקט מיד בלחיצה כדי לשמור על הרשאת האודיו פעילה גם לאחר זמן המתנה ארוך
             audioPlayer.src = "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA";
             audioPlayer.play().catch(e => console.warn("Unlock ignored", e));
             audioPlayer.pause();
@@ -538,6 +540,7 @@
                     
                     const data = await response.json();
                     if (data.success && data.audioBase64) {
+                        // הפורמט שונה ל-WAV כדי למנוע קריסות בקידוד Mime
                         return `data:audio/wav;base64,${data.audioBase64}`;
                     } else {
                         throw new Error(data.error || "Unknown API Error");
@@ -560,15 +563,36 @@
             
             try {
                 const audioUrl = await fetchAudioFromBackend(chunkText);
+                
+                // --- התאמות ייעודיות לאייפון (iOS Safari) ---
                 audioPlayer.src = audioUrl;
-                audioPlayer.currentTime = currentBook.audioTimestamp || 0; 
+                audioPlayer.load(); // כופה על הדפדפן להתחיל לעבד את הנתונים מיד
                 
-                await requestWakeLock();
-                await audioPlayer.play();
-                
-                toggleLoading(false);
-                updatePlayPauseIcon();
-                updateMediaSession();
+                // ממתינים לאישור שהדפדפן פיענח את הקובץ לפני שנוגעים בזמנים
+                audioPlayer.onloadedmetadata = async () => {
+                    try {
+                        if (currentBook.audioTimestamp > 0) {
+                            audioPlayer.currentTime = currentBook.audioTimestamp; 
+                        }
+                        
+                        await requestWakeLock();
+                        await audioPlayer.play();
+                        
+                        toggleLoading(false);
+                        updatePlayPauseIcon();
+                        updateMediaSession();
+                    } catch (playError) {
+                        toggleLoading(false);
+                        showToast("Playback error: " + playError.message, true);
+                        console.error("Play error:", playError);
+                    }
+                };
+
+                // טיפול במקרה שהפורמט נדחה על ידי המכשיר
+                audioPlayer.onerror = () => {
+                    toggleLoading(false);
+                    showToast("Error: Safari rejected the audio format.", true);
+                };
 
             } catch (error) {
                 toggleLoading(false);
