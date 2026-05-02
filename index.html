@@ -305,7 +305,7 @@
 
     <script>
         // =========================================================================
-        // CyberTTS - Core Application Logic (WITH DEBUG METRICS)
+        // CyberTTS - Core Application Logic
         // =========================================================================
 
         const GAS_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbyTYl6BgrnfwyOcu-nvhUG7sYWkRf0RCx1V-KJkhqued5FFGdgWaxOKsmdo7WjtUKM/exec';
@@ -491,10 +491,11 @@
             document.getElementById('player-view').style.display = 'flex';
             document.getElementById('now-playing-title').textContent = currentBook.title;
             
-            // --- מנגנון שחרור חסימת דפדפן ---
+            // --- מנגנון שחרור חסימת דפדפן (Unlock Autoplay) ---
             audioPlayer.src = "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA";
             audioPlayer.play().catch(e => console.warn("Unlock ignored", e));
             audioPlayer.pause();
+            // ---------------------------------------------------
 
             updatePlayerUI();
             updateMediaSession();
@@ -515,6 +516,9 @@
             document.getElementById('eta-display').textContent = `ETA: ~${estimatedMinutesLeft} mins`;
         };
 
+        // =========================================================================
+        // התיקון הקריטי: המרת פורמט L16 הגולמי לפורמט WAV תקין
+        // =========================================================================
         const fetchAudioFromBackend = async (text, retries = 4) => {
             if (GAS_WEB_APP_URL === 'PASTE_YOUR_WEB_APP_URL_HERE') {
                 throw new Error("GAS Web App URL is missing. Please configure GAS_WEB_APP_URL in the code.");
@@ -536,24 +540,57 @@
                     
                     const data = await response.json();
                     if (data.success && data.audioBase64) {
-                        const exactMime = data.mimeType || "audio/mp3";
                         
-                        // === הזרקת כלי מדידה ובקרה ליומן המפתחים ===
-                        console.log(`[DEBUG] Raw response success. Base64 length: ${data.audioBase64.length} chars. MimeType from server: ${exactMime}`);
-                        if (data.audioBase64.length % 4 !== 0) console.warn("[DEBUG] WARNING: Base64 string is corrupted (does not divide by 4)!");
+                        console.log(`[DEBUG] Raw response success. Base64 length: ${data.audioBase64.length} chars. MimeType from server: ${data.mimeType}`);
                         
-                        // === המרת מחרוזת Base64 לקובץ וירטואלי (Blob) ===
-                        const cleanBase64 = data.audioBase64.replace(/\s/g, ''); 
-                        const byteCharacters = atob(cleanBase64);
-                        const byteNumbers = new Array(byteCharacters.length);
-                        for (let j = 0; j < byteCharacters.length; j++) {
-                            byteNumbers[j] = byteCharacters.charCodeAt(j);
+                        // המרת ה-Base64 למערך בינארי גולמי
+                        const cleanBase64 = data.audioBase64.replace(/\s/g, '');
+                        const binaryString = atob(cleanBase64);
+                        const len = binaryString.length;
+                        
+                        // נתוני הקידוד של גוגל: 24kHz, מונו, 16-bit
+                        const sampleRate = 24000;
+                        const numChannels = 1;
+                        const bitsPerSample = 16;
+                        const byteRate = (sampleRate * numChannels * bitsPerSample) / 8;
+                        const blockAlign = (numChannels * bitsPerSample) / 8;
+                        const dataSize = len;
+                        const chunkSize = 36 + dataSize;
+                        
+                        // יצירת חוצץ מידע (Buffer) עם מקום לכותרת ה-WAV (44 בתים) + נתוני השמע
+                        const buffer = new ArrayBuffer(44 + len);
+                        const view = new DataView(buffer);
+                        
+                        // פונקציית עזר לכתיבת טקסט לכותרת
+                        const writeString = (offset, string) => {
+                            for (let j = 0; j < string.length; j++) {
+                                view.setUint8(offset + j, string.charCodeAt(j));
+                            }
+                        };
+                        
+                        // הרכבת כותרת WAV (RIFF Header)
+                        writeString(0, 'RIFF');
+                        view.setUint32(4, chunkSize, true);
+                        writeString(8, 'WAVE');
+                        writeString(12, 'fmt ');
+                        view.setUint32(16, 16, true);
+                        view.setUint16(20, 1, true); // 1 = PCM (לא דחוס)
+                        view.setUint16(22, numChannels, true);
+                        view.setUint32(24, sampleRate, true);
+                        view.setUint32(28, byteRate, true);
+                        view.setUint16(32, blockAlign, true);
+                        view.setUint16(34, bitsPerSample, true);
+                        writeString(36, 'data');
+                        view.setUint32(40, dataSize, true);
+                        
+                        // העתקת הנתונים הגולמיים (הקול עצמו) מיד אחרי הכותרת
+                        for (let j = 0; j < len; j++) {
+                            view.setUint8(44 + j, binaryString.charCodeAt(j));
                         }
-                        const byteArray = new Uint8Array(byteNumbers);
-                        const blob = new Blob([byteArray], { type: exactMime });
                         
+                        // אריזת הכל כקובץ הניתן לניגון בדפדפן
+                        const blob = new Blob([view], { type: 'audio/wav' });
                         return URL.createObjectURL(blob);
-                        // ===============================================
 
                     } else {
                         throw new Error(data.error || "Unknown API Error");
@@ -567,6 +604,7 @@
                 }
             }
         };
+        // =========================================================================
 
         const playCurrentChunk = async () => {
             if (!currentBook) return;
@@ -577,6 +615,7 @@
             try {
                 const audioUrl = await fetchAudioFromBackend(chunkText);
                 
+                // ניקוי הקובץ הקודם מהזיכרון כדי למנוע דליפות זיכרון באייפון
                 if (audioPlayer.src && audioPlayer.src.startsWith('blob:')) {
                     URL.revokeObjectURL(audioPlayer.src);
                 }
@@ -584,6 +623,7 @@
                 audioPlayer.src = audioUrl;
                 audioPlayer.load(); 
                 
+                // סנכרון זמנים בטוח לאחר טעינת הקובץ (למניעת קריסות בספארי)
                 audioPlayer.onloadedmetadata = async () => {
                     try {
                         if (currentBook.audioTimestamp > 0) {
