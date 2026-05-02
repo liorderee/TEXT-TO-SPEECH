@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Legenderee TTS - Audio Reader</title>
+    <title>CyberTTS - Audio Reader</title>
     
     <!-- PDF.js library for client-side text extraction -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
@@ -11,7 +11,7 @@
 
     <style>
         /* =========================================
-           CSS - Layout & Typography (No Glow)
+           CSS - Cyberpunk Aesthetics & Layout
            ========================================= */
         :root {
             --bg-color: #050a1f;
@@ -37,6 +37,23 @@
             min-height: 100vh;
         }
 
+        body::before {
+            content: '';
+            position: fixed;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle at 50% 50%, rgba(0, 243, 255, 0.05) 0%, transparent 50%);
+            z-index: -1;
+            animation: pulseBg 10s infinite alternate;
+        }
+
+        @keyframes pulseBg {
+            0% { transform: scale(1); }
+            100% { transform: scale(1.1); }
+        }
+
         #toast-container {
             position: fixed;
             top: 20px;
@@ -53,6 +70,7 @@
             border-left: 4px solid var(--neon-blue);
             padding: 15px 25px;
             border-radius: 4px;
+            box-shadow: 0 0 15px rgba(0, 243, 255, 0.2);
             opacity: 0;
             transition: opacity 0.3s ease-in-out;
         }
@@ -69,48 +87,29 @@
         h1, h2 {
             text-align: center;
             color: var(--neon-blue);
+            text-shadow: 0 0 10px rgba(0, 243, 255, 0.4);
             margin-bottom: 20px;
         }
 
         #library-view { display: block; }
 
-        /* --- Drag & Drop Area Redesign --- */
         #drop-zone {
             border: 2px dashed var(--neon-blue);
             border-radius: 10px;
-            padding: 40px 20px;
+            padding: 50px 20px;
             text-align: center;
             background: rgba(0, 243, 255, 0.05);
             cursor: pointer;
-            transition: background 0.3s ease;
+            transition: all 0.3s ease;
             margin-bottom: 30px;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
+            box-shadow: inset 0 0 20px rgba(0, 243, 255, 0.05);
         }
 
         #drop-zone.dragover {
             background: rgba(0, 243, 255, 0.15);
+            box-shadow: inset 0 0 30px rgba(0, 243, 255, 0.3);
         }
 
-        .browse-btn {
-            background-color: transparent;
-            color: var(--neon-blue);
-            border: 2px solid var(--neon-blue);
-            padding: 12px 25px;
-            font-size: 1.2rem;
-            border-radius: 6px;
-            cursor: pointer;
-            margin-bottom: 15px;
-            transition: background-color 0.2s;
-        }
-
-        .browse-btn:hover {
-            background-color: rgba(0, 243, 255, 0.1);
-        }
-
-        /* --- Book List Restyling --- */
         .book-list { list-style: none; }
 
         .book-item {
@@ -131,20 +130,8 @@
             border-color: var(--neon-blue);
         }
 
-        .book-info { 
-            flex: 1; 
-            min-width: 0; 
-            padding-right: 15px;
-        }
-        
-        .book-title { 
-            font-weight: bold; 
-            font-size: 1.1rem; 
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
-        
+        .book-info { flex: 1; }
+        .book-title { font-weight: bold; font-size: 1.1rem; }
         .book-progress { font-size: 0.8rem; color: #aaa; margin-top: 5px; }
         
         .delete-btn {
@@ -154,47 +141,27 @@
             padding: 5px 10px;
             border-radius: 4px;
             cursor: pointer;
-            flex-shrink: 0;
         }
 
-        /* --- Player View Restyling --- */
         #player-view {
             display: none;
-            height: auto;
-            min-height: 50vh;
+            height: 60vh;
             flex-direction: column;
             justify-content: center;
             align-items: center;
-            padding-top: 20px;
         }
 
         #now-playing-title {
-            font-size: 1.8rem;
+            font-size: 2rem;
             text-align: center;
-            margin-bottom: 30px;
-            width: 100%;
-            word-wrap: break-word; 
-            color: var(--neon-blue);
+            margin-bottom: 10px;
+            text-shadow: 0 0 15px var(--neon-blue);
         }
 
-        .center-player-controls {
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            gap: 30px;
-            margin-bottom: 40px;
-        }
-
-        .center-control-btn {
-            background: none;
-            border: none;
-            color: var(--neon-blue);
-            font-size: 2.5rem;
-            cursor: pointer;
-        }
-        
-        .center-control-btn.play-pause { 
-            font-size: 4rem; 
+        #now-playing-chunk {
+            font-size: 1.2rem;
+            color: #888;
+            letter-spacing: 2px;
         }
 
         .equalizer {
@@ -202,7 +169,7 @@
             align-items: flex-end;
             gap: 5px;
             height: 50px;
-            margin-bottom: 30px;
+            margin-top: 30px;
         }
         .bar {
             width: 10px;
@@ -217,35 +184,44 @@
 
         @keyframes bounce {
             0% { height: 10px; opacity: 0.5; }
-            100% { height: 50px; opacity: 1; }
+            100% { height: 50px; opacity: 1; box-shadow: 0 0 10px var(--neon-blue); }
         }
 
-        /* --- Bottom Footer Restyling --- */
         #bottom-player {
             position: fixed;
             bottom: 0;
             left: 0;
             width: 100%;
-            background: var(--bg-color);
+            background: rgba(5, 10, 31, 0.9);
+            backdrop-filter: blur(10px);
             border-top: 1px solid var(--neon-blue);
+            box-shadow: 0 -5px 20px rgba(0, 243, 255, 0.1);
             padding: 15px;
             display: flex;
             flex-direction: column;
-            gap: 15px;
+            gap: 10px;
             z-index: 100;
         }
 
-        .player-info-row {
+        .player-controls {
             display: flex;
-            justify-content: space-between;
+            justify-content: center;
             align-items: center;
-            font-size: 0.9rem;
-            color: #aaa;
-            border-bottom: 1px solid rgba(0, 243, 255, 0.2);
-            padding-bottom: 10px;
+            gap: 20px;
         }
 
-        .player-settings-row {
+        .control-btn {
+            background: none;
+            border: none;
+            color: var(--neon-blue);
+            font-size: 1.5rem;
+            cursor: pointer;
+            transition: text-shadow 0.2s;
+        }
+        .control-btn:hover { text-shadow: 0 0 10px var(--neon-blue); }
+        .control-btn.play-pause { font-size: 2.5rem; }
+
+        .player-settings {
             display: flex;
             justify-content: space-between;
             align-items: center;
@@ -261,16 +237,10 @@
             outline: none;
         }
 
-        .back-btn {
-            background: transparent; 
-            color: var(--text-light); 
-            border: 1px solid var(--text-light); 
-            padding: 5px 10px; 
-            border-radius: 4px; 
-            cursor: pointer;
-            font-size: 0.8rem;
+        #eta-display {
+            font-family: monospace;
+            color: #aaa;
         }
-
     </style>
 </head>
 <body>
@@ -279,11 +249,11 @@
 
     <main>
         <section id="library-view">
-            <h1>LEGENDEREE TTS</h1>
+            <h1>CYBER TTS LIBRARY</h1>
             
             <div id="drop-zone">
-                <button class="browse-btn" onclick="document.getElementById('file-input').click()">Click to Browse</button>
-                <p style="font-size: 0.9rem; color:#888;">or Drag & Drop PDF</p>
+                <p>Drag & Drop PDF Book Here</p>
+                <p style="font-size: 0.8rem; margin-top:10px; color:#aaa;">(Or click to browse)</p>
                 <input type="file" id="file-input" accept="application/pdf" style="display: none;">
             </div>
 
@@ -293,15 +263,8 @@
 
         <section id="player-view">
             <h1 id="now-playing-title">Book Title</h1>
+            <div id="now-playing-chunk">Chunk 1 of X</div>
             
-            <div class="center-player-controls">
-                <button class="center-control-btn" id="btn-prev-chunk" title="Previous Chunk">⏮</button>
-                <button class="center-control-btn" id="btn-skip-back" title="-15 Seconds">⏪</button>
-                <button class="center-control-btn play-pause" id="btn-play-pause">▶</button>
-                <button class="center-control-btn" id="btn-skip-forward" title="+15 Seconds">⏩</button>
-                <button class="center-control-btn" id="btn-next-chunk" title="Next Chunk">⏭</button>
-            </div>
-
             <div class="equalizer" id="loading-anim">
                 <div class="bar"></div>
                 <div class="bar"></div>
@@ -309,19 +272,17 @@
                 <div class="bar"></div>
                 <div class="bar"></div>
             </div>
+            
+            <button onclick="window.showLibrary()" style="margin-top: 40px; background:transparent; color:var(--neon-blue); border:1px solid var(--neon-blue); padding:8px 15px; border-radius:4px; cursor:pointer;">&larr; Back to Library</button>
         </section>
     </main>
 
-    <footer id="bottom-player" style="display: none;">
-        <div class="player-info-row">
-            <span id="now-playing-chunk">Chunk 1 of X</span>
-            <span id="eta-display">ETA: --:--</span>
-        </div>
-        <div class="player-settings-row">
-            <button class="back-btn" onclick="window.showLibrary()">Back to Library</button>
+    <footer id="bottom-player">
+        <div class="player-settings">
             <select id="voice-select">
                 <option value="default">Default Voice</option>
             </select>
+            <div id="eta-display">ETA: --:--</div>
             <select id="speed-select">
                 <option value="0.8">0.8x</option>
                 <option value="1.0" selected>1.0x</option>
@@ -330,6 +291,15 @@
                 <option value="2.0">2.0x</option>
             </select>
         </div>
+
+        <div class="player-controls">
+            <button class="control-btn" id="btn-prev-chunk" title="Previous Chunk">⏮</button>
+            <button class="control-btn" id="btn-skip-back" title="-15 Seconds">⏪</button>
+            <button class="control-btn play-pause" id="btn-play-pause">▶</button>
+            <button class="control-btn" id="btn-skip-forward" title="+15 Seconds">⏩</button>
+            <button class="control-btn" id="btn-next-chunk" title="Next Chunk">⏭</button>
+        </div>
+
         <audio id="core-audio-player" style="display:none;"></audio>
     </footer>
 
@@ -496,10 +466,10 @@
                 
                 li.innerHTML = `
                     <div class="book-info" onclick="loadBook('${book.id}')">
-                        <div class="book-title" title="${book.title}">${book.title}</div>
+                        <div class="book-title">${book.title}</div>
                         <div class="book-progress">Progress: ${progressPct}% (Chunk ${book.currentChunkIndex + 1} of ${book.chunks.length})</div>
                     </div>
-                    <button class="delete-btn" onclick="event.stopPropagation(); deleteBook('${book.id}')">Delete</button>
+                    <button class="delete-btn" onclick="deleteBook('${book.id}')">Delete</button>
                 `;
                 container.appendChild(li);
             });
@@ -519,7 +489,6 @@
 
             document.getElementById('library-view').style.display = 'none';
             document.getElementById('player-view').style.display = 'flex';
-            document.getElementById('bottom-player').style.display = 'flex';
             document.getElementById('now-playing-title').textContent = currentBook.title;
             
             // --- מנגנון שחרור חסימת דפדפן (Unlock Autoplay) ---
@@ -547,6 +516,9 @@
             document.getElementById('eta-display').textContent = `ETA: ~${estimatedMinutesLeft} mins`;
         };
 
+        // =========================================================================
+        // התיקון הקריטי: המרת פורמט L16 הגולמי לפורמט WAV תקין
+        // =========================================================================
         const fetchAudioFromBackend = async (text, retries = 4) => {
             if (GAS_WEB_APP_URL === 'PASTE_YOUR_WEB_APP_URL_HERE') {
                 throw new Error("GAS Web App URL is missing. Please configure GAS_WEB_APP_URL in the code.");
@@ -567,14 +539,16 @@
                     });
                     
                     const data = await response.json();
-                    
                     if (data.success && data.audioBase64) {
                         
-                        // המרת ה-L16 ל-WAV (הפתרון שעבד)
+                        console.log(`[DEBUG] Raw response success. Base64 length: ${data.audioBase64.length} chars. MimeType from server: ${data.mimeType}`);
+                        
+                        // המרת ה-Base64 למערך בינארי גולמי
                         const cleanBase64 = data.audioBase64.replace(/\s/g, '');
                         const binaryString = atob(cleanBase64);
                         const len = binaryString.length;
                         
+                        // נתוני הקידוד של גוגל: 24kHz, מונו, 16-bit
                         const sampleRate = 24000;
                         const numChannels = 1;
                         const bitsPerSample = 16;
@@ -583,21 +557,24 @@
                         const dataSize = len;
                         const chunkSize = 36 + dataSize;
                         
+                        // יצירת חוצץ מידע (Buffer) עם מקום לכותרת ה-WAV (44 בתים) + נתוני השמע
                         const buffer = new ArrayBuffer(44 + len);
                         const view = new DataView(buffer);
                         
+                        // פונקציית עזר לכתיבת טקסט לכותרת
                         const writeString = (offset, string) => {
                             for (let j = 0; j < string.length; j++) {
                                 view.setUint8(offset + j, string.charCodeAt(j));
                             }
                         };
                         
+                        // הרכבת כותרת WAV (RIFF Header)
                         writeString(0, 'RIFF');
                         view.setUint32(4, chunkSize, true);
                         writeString(8, 'WAVE');
                         writeString(12, 'fmt ');
                         view.setUint32(16, 16, true);
-                        view.setUint16(20, 1, true); 
+                        view.setUint16(20, 1, true); // 1 = PCM (לא דחוס)
                         view.setUint16(22, numChannels, true);
                         view.setUint32(24, sampleRate, true);
                         view.setUint32(28, byteRate, true);
@@ -606,10 +583,12 @@
                         writeString(36, 'data');
                         view.setUint32(40, dataSize, true);
                         
+                        // העתקת הנתונים הגולמיים (הקול עצמו) מיד אחרי הכותרת
                         for (let j = 0; j < len; j++) {
                             view.setUint8(44 + j, binaryString.charCodeAt(j));
                         }
                         
+                        // אריזת הכל כקובץ הניתן לניגון בדפדפן
                         const blob = new Blob([view], { type: 'audio/wav' });
                         return URL.createObjectURL(blob);
 
@@ -620,12 +599,12 @@
                     console.warn(`Fetch attempt ${i+1} failed:`, error.message);
                     if (i === retries - 1) throw error;
                     
-                    // מנגנון ה-Retry הפשוט והמקורי שעבד 
                     const waitTime = Math.pow(2, i) * 5000; 
                     await new Promise(res => setTimeout(res, waitTime));
                 }
             }
         };
+        // =========================================================================
 
         const playCurrentChunk = async () => {
             if (!currentBook) return;
@@ -636,6 +615,7 @@
             try {
                 const audioUrl = await fetchAudioFromBackend(chunkText);
                 
+                // ניקוי הקובץ הקודם מהזיכרון כדי למנוע דליפות זיכרון באייפון
                 if (audioPlayer.src && audioPlayer.src.startsWith('blob:')) {
                     URL.revokeObjectURL(audioPlayer.src);
                 }
@@ -643,6 +623,7 @@
                 audioPlayer.src = audioUrl;
                 audioPlayer.load(); 
                 
+                // סנכרון זמנים בטוח לאחר טעינת הקובץ (למניעת קריסות בספארי)
                 audioPlayer.onloadedmetadata = async () => {
                     try {
                         if (currentBook.audioTimestamp > 0) {
@@ -740,7 +721,6 @@
 
         window.showLibrary = () => {
             document.getElementById('player-view').style.display = 'none';
-            document.getElementById('bottom-player').style.display = 'none';
             document.getElementById('library-view').style.display = 'block';
             audioPlayer.pause();
             releaseWakeLock();
@@ -754,9 +734,9 @@
                 navigator.mediaSession.metadata = new MediaMetadata({
                     title: `Chunk ${currentBook.currentChunkIndex + 1}/${currentBook.chunks.length}`,
                     artist: currentBook.title,
-                    album: 'Legenderee TTS',
+                    album: 'CyberTTS Library',
                     artwork: [
-                        { src: 'https://via.placeholder.com/512/050a1f/00f3ff?text=Legenderee', sizes: '512x512', type: 'image/png' }
+                        { src: 'https://via.placeholder.com/512/050a1f/00f3ff?text=CyberTTS', sizes: '512x512', type: 'image/png' }
                     ]
                 });
 
@@ -789,11 +769,7 @@
         const dropZone = document.getElementById('drop-zone');
         const fileInput = document.getElementById('file-input');
 
-        dropZone.addEventListener('click', (e) => {
-            if(e.target !== fileInput) {
-               fileInput.click();
-            }
-        });
+        dropZone.addEventListener('click', () => fileInput.click());
 
         dropZone.addEventListener('dragover', (e) => {
             e.preventDefault();
