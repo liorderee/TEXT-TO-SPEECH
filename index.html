@@ -305,10 +305,9 @@
 
     <script>
         // =========================================================================
-        // CyberTTS - Core Application Logic
+        // CyberTTS - Core Application Logic (WITH DEBUG METRICS)
         // =========================================================================
 
-        // --- החלף את המחרוזת כאן בכתובת ה-URL שקיבלת מ-Google Apps Script ---
         const GAS_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbyTYl6BgrnfwyOcu-nvhUG7sYWkRf0RCx1V-KJkhqued5FFGdgWaxOKsmdo7WjtUKM/exec';
 
         // === State Management ===
@@ -317,7 +316,6 @@
         let wakeLock = null;
         const audioPlayer = document.getElementById('core-audio-player');
         
-        // הגבלת מילים למקטע כדי לשמור על יציבות השרת ומניעת שגיאות Timeout
         const MAX_WORDS_PER_CHUNK = 350; 
 
         // === 1. IndexedDB Setup (Local Database) ===
@@ -493,11 +491,10 @@
             document.getElementById('player-view').style.display = 'flex';
             document.getElementById('now-playing-title').textContent = currentBook.title;
             
-            // --- מנגנון שחרור חסימת דפדפן (Unlock Autoplay) ---
+            // --- מנגנון שחרור חסימת דפדפן ---
             audioPlayer.src = "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA";
             audioPlayer.play().catch(e => console.warn("Unlock ignored", e));
             audioPlayer.pause();
-            // ---------------------------------------------------
 
             updatePlayerUI();
             updateMediaSession();
@@ -541,8 +538,11 @@
                     if (data.success && data.audioBase64) {
                         const exactMime = data.mimeType || "audio/mp3";
                         
+                        // === הזרקת כלי מדידה ובקרה ליומן המפתחים ===
+                        console.log(`[DEBUG] Raw response success. Base64 length: ${data.audioBase64.length} chars. MimeType from server: ${exactMime}`);
+                        if (data.audioBase64.length % 4 !== 0) console.warn("[DEBUG] WARNING: Base64 string is corrupted (does not divide by 4)!");
+                        
                         // === המרת מחרוזת Base64 לקובץ וירטואלי (Blob) ===
-                        // פותר קריסות שגיאות Data URI ארוכים מדי בדפדפני iOS ו-Chrome
                         const cleanBase64 = data.audioBase64.replace(/\s/g, ''); 
                         const byteCharacters = atob(cleanBase64);
                         const byteNumbers = new Array(byteCharacters.length);
@@ -577,7 +577,6 @@
             try {
                 const audioUrl = await fetchAudioFromBackend(chunkText);
                 
-                // ניקוי הקובץ הקודם מהזיכרון כדי למנוע דליפות זיכרון
                 if (audioPlayer.src && audioPlayer.src.startsWith('blob:')) {
                     URL.revokeObjectURL(audioPlayer.src);
                 }
@@ -585,7 +584,6 @@
                 audioPlayer.src = audioUrl;
                 audioPlayer.load(); 
                 
-                // סנכרון זמנים בטוח לאחר טעינת הקובץ
                 audioPlayer.onloadedmetadata = async () => {
                     try {
                         if (currentBook.audioTimestamp > 0) {
