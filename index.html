@@ -133,7 +133,7 @@
 
         .book-info { 
             flex: 1; 
-            min-width: 0; /* Important for flex child truncation */
+            min-width: 0; 
             padding-right: 15px;
         }
         
@@ -173,11 +173,10 @@
             text-align: center;
             margin-bottom: 30px;
             width: 100%;
-            word-wrap: break-word; /* Allows long titles to wrap nicely on iPhone */
+            word-wrap: break-word; 
             color: var(--neon-blue);
         }
 
-        /* Central, large playback controls */
         .center-player-controls {
             display: flex;
             justify-content: center;
@@ -227,7 +226,7 @@
             bottom: 0;
             left: 0;
             width: 100%;
-            background: var(--bg-color); /* Solid background, no blur */
+            background: var(--bg-color);
             border-top: 1px solid var(--neon-blue);
             padding: 15px;
             display: flex;
@@ -568,16 +567,13 @@
                     });
                     
                     const data = await response.json();
+                    
                     if (data.success && data.audioBase64) {
-                        
-                        console.log(`[DEBUG] Raw response success. Base64 length: ${data.audioBase64.length} chars. MimeType from server: ${data.mimeType}`);
-                        
-                        // המרת ה-Base64 למערך בינארי גולמי
+                        // המרת ה-L16 ל-WAV
                         const cleanBase64 = data.audioBase64.replace(/\s/g, '');
                         const binaryString = atob(cleanBase64);
                         const len = binaryString.length;
                         
-                        // נתוני הקידוד של גוגל: 24kHz, מונו, 16-bit
                         const sampleRate = 24000;
                         const numChannels = 1;
                         const bitsPerSample = 16;
@@ -621,9 +617,26 @@
                     }
                 } catch (error) {
                     console.warn(`Fetch attempt ${i+1} failed:`, error.message);
-                    if (i === retries - 1) throw error;
                     
-                    const waitTime = Math.pow(2, i) * 5000; 
+                    if (i === retries - 1) {
+                        throw error;
+                    }
+                    
+                    // ==============================================================
+                    // התיקון הקריטי: מנגנון "המתנה חכמה" (Smart Backoff)
+                    // קורא את מספר השניות המדויק שגוגל דורשת ומשהה את הקוד לפיהן
+                    // ==============================================================
+                    let waitTime = Math.pow(2, i) * 5000; 
+                    
+                    const match = error.message.match(/retry in ([\d.]+)s/i);
+                    if (match && match[1]) {
+                        waitTime = (parseFloat(match[1]) * 1000) + 1500; // המתנה מדויקת + שניה וחצי לביטחון
+                        console.log(`[DEBUG] Smart Wait: Pausing API for ${(waitTime/1000).toFixed(1)}s to clear Google Quota...`);
+                    } else if (error.message.toLowerCase().includes("quota")) {
+                        waitTime = 61000; // חומת מגן לקריסות מכסה לא מזוהות
+                        console.log(`[DEBUG] Smart Wait: Unrecognized quota error. Forcing 60s cooldown...`);
+                    }
+                    
                     await new Promise(res => setTimeout(res, waitTime));
                 }
             }
