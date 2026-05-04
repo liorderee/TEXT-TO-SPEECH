@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Legenderee TTS - Audio Reader</title>
+    <title>Legenderee TTS - Audio Reader (Prefetch Optimized)</title>
     
     <!-- PDF.js library for client-side text extraction -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
@@ -271,6 +271,21 @@
             cursor: pointer;
             font-size: 0.8rem;
         }
+        
+        /* Loading indicator for prefetch */
+        #prefetch-indicator {
+            font-size: 0.8rem;
+            color: #6c757d;
+            margin-top: -10px;
+            margin-bottom: 10px;
+            height: 15px;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+        
+        #prefetch-indicator.active {
+            opacity: 1;
+        }
 
     </style>
 </head>
@@ -310,6 +325,8 @@
                 <button class="center-control-btn" id="btn-skip-forward" title="+15 Seconds">⏩</button>
                 <button class="center-control-btn" id="btn-next-chunk" title="Next Chunk">⏭</button>
             </div>
+            
+            <div id="prefetch-indicator">Fetching next part...</div>
         </section>
     </main>
 
@@ -345,9 +362,14 @@
         let db;
         let currentBook = null;
         let wakeLock = null;
+        
+        // **NEW: Prefetching State Variable**
+        let nextChunkAudioUrl = null; 
+        
         const audioPlayer = document.getElementById('core-audio-player');
         
-        const MAX_WORDS_PER_CHUNK = 350; 
+        // **CHANGED: Increased chunk size to 700 words per API limits analysis**
+        const MAX_WORDS_PER_CHUNK = 700; 
 
         // === 1. IndexedDB Setup (Local Database) ===
         const initDB = () => {
@@ -412,6 +434,16 @@
 
         const toggleLoading = (isLoading) => {
             document.getElementById('loading-anim').style.display = isLoading ? 'flex' : 'none';
+        };
+        
+        // **NEW: UI function for prefetch indicator**
+        const setPrefetchIndicator = (isActive) => {
+            const indicator = document.getElementById('prefetch-indicator');
+            if (isActive) {
+                indicator.classList.add('active');
+            } else {
+                indicator.classList.remove('active');
+            }
         };
 
         // === 3. PDF Processing & Chunking ===
@@ -517,6 +549,10 @@
             const books = await getAllBooksFromDB();
             currentBook = books.find(b => b.id === id);
             if (!currentBook) return;
+            
+            // **NEW: Reset prefetch state when loading a new book**
+            nextChunkAudioUrl = null;
+            setPrefetchIndicator(false);
 
             document.getElementById('library-view').style.display = 'none';
             document.getElementById('player-view').style.display = 'flex';
@@ -572,12 +608,10 @@
                         
                         console.log(`[DEBUG] Raw response success. Base64 length: ${data.audioBase64.length} chars. MimeType from server: ${data.mimeType}`);
                         
-                        // המרת ה-Base64 למערך בינארי גולמי
                         const cleanBase64 = data.audioBase64.replace(/\s/g, '');
                         const binaryString = atob(cleanBase64);
                         const len = binaryString.length;
                         
-                        // נתוני הקידוד של גוגל: 24kHz, מונו, 16-bit
                         const sampleRate = 24000;
                         const numChannels = 1;
                         const bitsPerSample = 16;
@@ -629,20 +663,64 @@
             }
         };
 
+        // **NEW: Function to pre-fetch the next chunk quietly in the background**
+        const preloadNextChunk = async () => {
+            if (!currentBook) return;
+            const nextIndex = currentBook.currentChunkIndex + 1;
+            
+            // Don't prefetch if we're at the end or already have it cached
+            if (nextIndex >= currentBook.chunks.length || nextChunkAudioUrl) return;
+            
+            console.log(`[PREFETCH] Starting download for chunk ${nextIndex + 1}...`);
+            setPrefetchIndicator(true);
+            
+            try {
+                const nextText = currentBook.chunks[nextIndex];
+                const preloadedUrl = await fetchAudioFromBackend(nextText);
+                
+                // Ensure we haven't skipped ahead manually while this was downloading
+                if (currentBook.currentChunkIndex + 1 === nextIndex) {
+                    nextChunkAudioUrl = preloadedUrl;
+                    console.log(`[PREFETCH] Chunk ${nextIndex + 1} downloaded and cached successfully.`);
+                } else {
+                    // We moved somewhere else before it finished, discard it
+                    URL.revokeObjectURL(preloadedUrl);
+                    console.log(`[PREFETCH] Chunk ${nextIndex + 1} finished, but index changed. Discarding.`);
+                }
+            } catch (err) {
+                console.warn("[PREFETCH] Failed to preload next chunk:", err.message);
+            } finally {
+                setPrefetchIndicator(false);
+            }
+        };
+
+        // **MODIFIED: Incorporate prefetching logic into standard playback**
         const playCurrentChunk = async () => {
             if (!currentBook) return;
             
             toggleLoading(true);
-            const chunkText = currentBook.chunks[currentBook.currentChunkIndex];
             
             try {
-                const audioUrl = await fetchAudioFromBackend(chunkText);
+                let audioUrlToPlay;
                 
+                // 1. Check if we have a pre-fetched URL waiting for this exact chunk
+                if (nextChunkAudioUrl) {
+                    console.log("[PLAY] Using PRE-FETCHED audio URL!");
+                    audioUrlToPlay = nextChunkAudioUrl;
+                    nextChunkAudioUrl = null; // Consume it
+                } else {
+                    // 2. Otherwise, fetch it normally (user skipped, or first load)
+                    console.log("[PLAY] Fetching audio normally (no cache).");
+                    const chunkText = currentBook.chunks[currentBook.currentChunkIndex];
+                    audioUrlToPlay = await fetchAudioFromBackend(chunkText);
+                }
+                
+                // Revoke old URL if it exists to free memory
                 if (audioPlayer.src && audioPlayer.src.startsWith('blob:')) {
                     URL.revokeObjectURL(audioPlayer.src);
                 }
 
-                audioPlayer.src = audioUrl;
+                audioPlayer.src = audioUrlToPlay;
                 audioPlayer.load(); 
                 
                 audioPlayer.onloadedmetadata = async () => {
@@ -657,6 +735,10 @@
                         toggleLoading(false);
                         updatePlayPauseIcon();
                         updateMediaSession();
+                        
+                        // **NEW: Initiate prefetching of the next chunk while THIS chunk plays**
+                        preloadNextChunk();
+                        
                     } catch (playError) {
                         toggleLoading(false);
                         showToast("Playback error: " + playError.message, true);
@@ -684,13 +766,14 @@
             }
         });
 
+        // **MODIFIED: Clear cache when skipping around**
         audioPlayer.addEventListener('ended', async () => {
             if (currentBook.currentChunkIndex < currentBook.chunks.length - 1) {
                 currentBook.currentChunkIndex++;
                 currentBook.audioTimestamp = 0;
                 await saveBookToDB(currentBook);
                 updatePlayerUI();
-                playCurrentChunk();
+                playCurrentChunk(); // This will now automatically use the pre-fetched URL if available
             } else {
                 showToast("Book finished!");
                 releaseWakeLock();
@@ -717,10 +800,15 @@
         document.getElementById('btn-skip-forward').addEventListener('click', () => { audioPlayer.currentTime += 15; });
         document.getElementById('btn-skip-back').addEventListener('click', () => { audioPlayer.currentTime -= 15; });
 
+        // **MODIFIED: Clear prefetch cache when skipping chunks manually**
         document.getElementById('btn-next-chunk').addEventListener('click', () => {
             if (currentBook && currentBook.currentChunkIndex < currentBook.chunks.length - 1) {
                 currentBook.currentChunkIndex++;
                 currentBook.audioTimestamp = 0;
+                
+                // We don't clear nextChunkAudioUrl here, because if they hit 'next' right after it preloaded, 
+                // the index matches and it will use it! The playCurrentChunk handles the logic.
+                
                 playCurrentChunk();
                 updatePlayerUI();
             }
@@ -730,6 +818,13 @@
             if (currentBook && currentBook.currentChunkIndex > 0) {
                 currentBook.currentChunkIndex--;
                 currentBook.audioTimestamp = 0;
+                
+                // Clear cache because we went backwards
+                if (nextChunkAudioUrl) {
+                    URL.revokeObjectURL(nextChunkAudioUrl);
+                    nextChunkAudioUrl = null;
+                }
+                
                 playCurrentChunk();
                 updatePlayerUI();
             }
