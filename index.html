@@ -265,7 +265,7 @@
         .back-btn {
             background: transparent; 
             color: var(--text-light); 
-            border: 1px solid var(--text-light); 
+            border: 1px solid var(--neon-blue); 
             padding: 5px 10px; 
             border-radius: 4px; 
             cursor: pointer;
@@ -295,20 +295,20 @@
         <section id="player-view">
             <h1 id="now-playing-title">Book Title</h1>
             
-            <div class="center-player-controls">
-                <button class="center-control-btn" id="btn-prev-chunk" title="Previous Chunk">⏮</button>
-                <button class="center-control-btn" id="btn-skip-back" title="-15 Seconds">⏪</button>
-                <button class="center-control-btn play-pause" id="btn-play-pause">▶</button>
-                <button class="center-control-btn" id="btn-skip-forward" title="+15 Seconds">⏩</button>
-                <button class="center-control-btn" id="btn-next-chunk" title="Next Chunk">⏭</button>
-            </div>
-
             <div class="equalizer" id="loading-anim">
                 <div class="bar"></div>
                 <div class="bar"></div>
                 <div class="bar"></div>
                 <div class="bar"></div>
                 <div class="bar"></div>
+            </div>
+
+            <div class="center-player-controls">
+                <button class="center-control-btn" id="btn-prev-chunk" title="Previous Chunk">⏮</button>
+                <button class="center-control-btn" id="btn-skip-back" title="-15 Seconds">⏪</button>
+                <button class="center-control-btn play-pause" id="btn-play-pause">▶</button>
+                <button class="center-control-btn" id="btn-skip-forward" title="+15 Seconds">⏩</button>
+                <button class="center-control-btn" id="btn-next-chunk" title="Next Chunk">⏭</button>
             </div>
         </section>
     </main>
