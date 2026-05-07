@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Legenderee TTS - Audio Reader (Prefetch Optimized)</title>
     
-    <!-- PDF.js library for client-side text extraction -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
     <script>pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';</script>
 
@@ -246,6 +245,37 @@
             padding-bottom: 10px;
         }
 
+        /* Jump Container Styling */
+        #jump-container {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            font-size: 0.85rem;
+            color: var(--neon-blue);
+        }
+        
+        #jump-input {
+            width: 50px;
+            background: var(--bg-color);
+            color: var(--text-light);
+            border: 1px solid var(--neon-blue);
+            border-radius: 4px;
+            padding: 2px 5px;
+            text-align: center;
+            outline: none;
+            font-size: 0.85rem;
+        }
+
+        /* Hide increment/decrement arrows on input */
+        #jump-input::-webkit-outer-spin-button,
+        #jump-input::-webkit-inner-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+        #jump-input[type=number] {
+            -moz-appearance: textfield;
+        }
+
         .player-settings-row {
             display: flex;
             justify-content: space-between;
@@ -333,6 +363,11 @@
     <footer id="bottom-player" style="display: none;">
         <div class="player-info-row">
             <span id="now-playing-chunk">Chunk 1 of X</span>
+            
+            <span id="jump-container">
+                Go to <input type="number" id="jump-input" min="1">
+            </span>
+
             <span id="eta-display">ETA: --:--</span>
         </div>
         <div class="player-settings-row">
@@ -363,12 +398,10 @@
         let currentBook = null;
         let wakeLock = null;
         
-        // **NEW: Prefetching State Variable**
         let nextChunkAudioUrl = null; 
         
         const audioPlayer = document.getElementById('core-audio-player');
         
-        // **CHANGED: Increased chunk size to 700 words per API limits analysis**
         const MAX_WORDS_PER_CHUNK = 700; 
 
         // === 1. IndexedDB Setup (Local Database) ===
@@ -436,7 +469,6 @@
             document.getElementById('loading-anim').style.display = isLoading ? 'flex' : 'none';
         };
         
-        // **NEW: UI function for prefetch indicator**
         const setPrefetchIndicator = (isActive) => {
             const indicator = document.getElementById('prefetch-indicator');
             if (isActive) {
@@ -550,7 +582,6 @@
             currentBook = books.find(b => b.id === id);
             if (!currentBook) return;
             
-            // **NEW: Reset prefetch state when loading a new book**
             nextChunkAudioUrl = null;
             setPrefetchIndicator(false);
 
@@ -576,8 +607,14 @@
         };
 
         const updatePlayerUI = () => {
+            if (!currentBook) return;
             document.getElementById('now-playing-chunk').textContent = 
                 `Chunk ${currentBook.currentChunkIndex + 1} of ${currentBook.chunks.length}`;
+            
+            // Update the jump input field
+            const jumpInput = document.getElementById('jump-input');
+            jumpInput.value = currentBook.currentChunkIndex + 1;
+            jumpInput.max = currentBook.chunks.length;
             
             const remainingChunks = currentBook.chunks.length - currentBook.currentChunkIndex;
             const estimatedMinutesLeft = Math.round((remainingChunks * MAX_WORDS_PER_CHUNK) / 150);
@@ -663,12 +700,10 @@
             }
         };
 
-        // **NEW: Function to pre-fetch the next chunk quietly in the background**
         const preloadNextChunk = async () => {
             if (!currentBook) return;
             const nextIndex = currentBook.currentChunkIndex + 1;
             
-            // Don't prefetch if we're at the end or already have it cached
             if (nextIndex >= currentBook.chunks.length || nextChunkAudioUrl) return;
             
             console.log(`[PREFETCH] Starting download for chunk ${nextIndex + 1}...`);
@@ -678,12 +713,10 @@
                 const nextText = currentBook.chunks[nextIndex];
                 const preloadedUrl = await fetchAudioFromBackend(nextText);
                 
-                // Ensure we haven't skipped ahead manually while this was downloading
                 if (currentBook.currentChunkIndex + 1 === nextIndex) {
                     nextChunkAudioUrl = preloadedUrl;
                     console.log(`[PREFETCH] Chunk ${nextIndex + 1} downloaded and cached successfully.`);
                 } else {
-                    // We moved somewhere else before it finished, discard it
                     URL.revokeObjectURL(preloadedUrl);
                     console.log(`[PREFETCH] Chunk ${nextIndex + 1} finished, but index changed. Discarding.`);
                 }
@@ -694,7 +727,6 @@
             }
         };
 
-        // **MODIFIED: Incorporate prefetching logic into standard playback**
         const playCurrentChunk = async () => {
             if (!currentBook) return;
             
@@ -703,19 +735,16 @@
             try {
                 let audioUrlToPlay;
                 
-                // 1. Check if we have a pre-fetched URL waiting for this exact chunk
                 if (nextChunkAudioUrl) {
                     console.log("[PLAY] Using PRE-FETCHED audio URL!");
                     audioUrlToPlay = nextChunkAudioUrl;
-                    nextChunkAudioUrl = null; // Consume it
+                    nextChunkAudioUrl = null; 
                 } else {
-                    // 2. Otherwise, fetch it normally (user skipped, or first load)
                     console.log("[PLAY] Fetching audio normally (no cache).");
                     const chunkText = currentBook.chunks[currentBook.currentChunkIndex];
                     audioUrlToPlay = await fetchAudioFromBackend(chunkText);
                 }
                 
-                // Revoke old URL if it exists to free memory
                 if (audioPlayer.src && audioPlayer.src.startsWith('blob:')) {
                     URL.revokeObjectURL(audioPlayer.src);
                 }
@@ -736,7 +765,6 @@
                         updatePlayPauseIcon();
                         updateMediaSession();
                         
-                        // **NEW: Initiate prefetching of the next chunk while THIS chunk plays**
                         preloadNextChunk();
                         
                     } catch (playError) {
@@ -766,14 +794,13 @@
             }
         });
 
-        // **MODIFIED: Clear cache when skipping around**
         audioPlayer.addEventListener('ended', async () => {
             if (currentBook.currentChunkIndex < currentBook.chunks.length - 1) {
                 currentBook.currentChunkIndex++;
                 currentBook.audioTimestamp = 0;
                 await saveBookToDB(currentBook);
                 updatePlayerUI();
-                playCurrentChunk(); // This will now automatically use the pre-fetched URL if available
+                playCurrentChunk(); 
             } else {
                 showToast("Book finished!");
                 releaseWakeLock();
@@ -800,15 +827,10 @@
         document.getElementById('btn-skip-forward').addEventListener('click', () => { audioPlayer.currentTime += 15; });
         document.getElementById('btn-skip-back').addEventListener('click', () => { audioPlayer.currentTime -= 15; });
 
-        // **MODIFIED: Clear prefetch cache when skipping chunks manually**
         document.getElementById('btn-next-chunk').addEventListener('click', () => {
             if (currentBook && currentBook.currentChunkIndex < currentBook.chunks.length - 1) {
                 currentBook.currentChunkIndex++;
                 currentBook.audioTimestamp = 0;
-                
-                // We don't clear nextChunkAudioUrl here, because if they hit 'next' right after it preloaded, 
-                // the index matches and it will use it! The playCurrentChunk handles the logic.
-                
                 playCurrentChunk();
                 updatePlayerUI();
             }
@@ -819,7 +841,6 @@
                 currentBook.currentChunkIndex--;
                 currentBook.audioTimestamp = 0;
                 
-                // Clear cache because we went backwards
                 if (nextChunkAudioUrl) {
                     URL.revokeObjectURL(nextChunkAudioUrl);
                     nextChunkAudioUrl = null;
@@ -827,6 +848,44 @@
                 
                 playCurrentChunk();
                 updatePlayerUI();
+            }
+        });
+
+        // Jump to specific chunk logic
+        document.getElementById('jump-input').addEventListener('change', async (e) => {
+            if (!currentBook) return;
+            
+            let targetChunk = parseInt(e.target.value);
+            
+            // Validate user input
+            if (isNaN(targetChunk) || targetChunk < 1) {
+                targetChunk = 1;
+            } else if (targetChunk > currentBook.chunks.length) {
+                targetChunk = currentBook.chunks.length;
+            }
+            
+            const targetIndex = targetChunk - 1;
+            
+            // Only trigger if it's a different chunk
+            if (currentBook.currentChunkIndex !== targetIndex) {
+                audioPlayer.pause();
+                currentBook.currentChunkIndex = targetIndex;
+                currentBook.audioTimestamp = 0;
+                
+                // Clear prefetch cache
+                if (nextChunkAudioUrl) {
+                    URL.revokeObjectURL(nextChunkAudioUrl);
+                    nextChunkAudioUrl = null;
+                }
+                
+                // Explicitly save the jump to DB
+                await saveBookToDB(currentBook);
+                
+                updatePlayerUI();
+                playCurrentChunk();
+            } else {
+                // If user typed the same number, just reset the UI
+                e.target.value = currentBook.currentChunkIndex + 1;
             }
         });
 
