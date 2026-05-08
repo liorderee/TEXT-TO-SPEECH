@@ -290,6 +290,7 @@
             padding: 5px;
             border-radius: 4px;
             outline: none;
+            max-width: 180px; /* תוספת למניעת חריגת טקסט במסכים קטנים */
         }
 
         .back-btn {
@@ -373,7 +374,37 @@
         <div class="player-settings-row">
             <button class="back-btn" onclick="window.showLibrary()">Back to Library</button>
             <select id="voice-select">
-                <option value="default">Default Voice</option>
+                <option value="Achernar">אכרנר - אישה (רך ועדין)</option>
+                <option value="Aoede">אאדה - אישה (קליל וזורם)</option>
+                <option value="Autonoe">אוטונואה - אישה (בהיר וצלול)</option>
+                <option value="Callirrhoe">קלירואה - אישה (נינוח ורגוע)</option>
+                <option value="Despina">דספינה - אישה (חלק ונעים)</option>
+                <option value="Erinome">ארינומה - אישה (ברור וחד)</option>
+                <option value="Gacrux">גקרוקס - אישה (בוגר וסמכותי)</option>
+                <option value="Kore">קורה - אישה (תקיף ויציב)</option>
+                <option value="Laomedeia">לאומדיה - אישה (קצבי ושמח)</option>
+                <option value="Leda">לדה - אישה (צעיר ורענן)</option>
+                <option value="Sulafat">סולאפט - אישה (חם ומזמין)</option>
+                <option value="Vindemiatrix">וינדמיאטריקס - אישה (עדין ומרגיע)</option>
+                <option value="Zephyr">זפיר - אישה (בהיר ואופטימי)</option>
+
+                <option value="Achird">אכירד - גבר (ידידותי)</option>
+                <option value="Algenib">אלגניב - גבר (מחוספס/צרוד)</option>
+                <option value="Algieba">אלג'יבה - גבר (חלק ואלגנטי)</option>
+                <option value="Alnilam">אלנילם - גבר (תקיף וסמכותי)</option>
+                <option value="Charon">כארון - גבר (אינפורמטיבי/קריין)</option>
+                <option value="Enceladus">אנקלדוס - גבר (לחוש/נשימתי)</option>
+                <option value="Fenrir">פנריר - גבר (נלהב ומרגש)</option>
+                <option value="Iapetus">יאפטוס - גבר (ברור וחד)</option>
+                <option value="Orus">אורוס - גבר (תקיף ויציב)</option>
+                <option value="Puck">פאק - גבר (קצבי ושמח)</option>
+                <option value="Pulcherrima">פולכרימה - גבר (ישיר ומוביל)</option>
+                <option value="Rasalgethi">ראסלגתי - גבר (אינפורמטיבי/חדשותי)</option>
+                <option value="Sadachbia">סדאכביה - גבר (חי ותוסס)</option>
+                <option value="Sadaltager">סדאלטאגר - גבר (ידען/מרצה)</option>
+                <option value="Schedar">שדאר - גבר (מאוזן ויציב)</option>
+                <option value="Umbriel">אומבריאל - גבר (נינוח וזורם)</option>
+                <option value="Zubenelgenubi">זובנאלג'נובי - גבר (יומיומי ולא רשמי)</option>
             </select>
             <select id="speed-select">
                 <option value="0.8">0.8x</option>
@@ -602,6 +633,12 @@
             const savedSpeed = localStorage.getItem('cybertts_speed') || "1.0";
             document.getElementById('speed-select').value = savedSpeed;
             audioPlayer.playbackRate = parseFloat(savedSpeed);
+            
+            // שליפת הקול השמור (או השארת ברירת המחדל אם אין)
+            const savedVoice = localStorage.getItem('cybertts_voice');
+            if (savedVoice) {
+                document.getElementById('voice-select').value = savedVoice;
+            }
 
             playCurrentChunk();
         };
@@ -611,7 +648,6 @@
             document.getElementById('now-playing-chunk').textContent = 
                 `Chunk ${currentBook.currentChunkIndex + 1} of ${currentBook.chunks.length}`;
             
-            // Update the jump input field
             const jumpInput = document.getElementById('jump-input');
             jumpInput.value = currentBook.currentChunkIndex + 1;
             jumpInput.max = currentBook.chunks.length;
@@ -851,13 +887,11 @@
             }
         });
 
-        // Jump to specific chunk logic
         document.getElementById('jump-input').addEventListener('change', async (e) => {
             if (!currentBook) return;
             
             let targetChunk = parseInt(e.target.value);
             
-            // Validate user input
             if (isNaN(targetChunk) || targetChunk < 1) {
                 targetChunk = 1;
             } else if (targetChunk > currentBook.chunks.length) {
@@ -866,32 +900,34 @@
             
             const targetIndex = targetChunk - 1;
             
-            // Only trigger if it's a different chunk
             if (currentBook.currentChunkIndex !== targetIndex) {
                 audioPlayer.pause();
                 currentBook.currentChunkIndex = targetIndex;
                 currentBook.audioTimestamp = 0;
                 
-                // Clear prefetch cache
                 if (nextChunkAudioUrl) {
                     URL.revokeObjectURL(nextChunkAudioUrl);
                     nextChunkAudioUrl = null;
                 }
                 
-                // Explicitly save the jump to DB
                 await saveBookToDB(currentBook);
                 
                 updatePlayerUI();
                 playCurrentChunk();
             } else {
-                // If user typed the same number, just reset the UI
                 e.target.value = currentBook.currentChunkIndex + 1;
             }
         });
 
+        // שמירת בחירת המהירות
         document.getElementById('speed-select').addEventListener('change', (e) => {
             audioPlayer.playbackRate = parseFloat(e.target.value);
             localStorage.setItem('cybertts_speed', e.target.value);
+        });
+        
+        // שמירת בחירת הקול לזיכרון המקומי
+        document.getElementById('voice-select').addEventListener('change', (e) => {
+            localStorage.setItem('cybertts_voice', e.target.value);
         });
 
         window.showLibrary = () => {
